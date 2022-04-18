@@ -1,0 +1,108 @@
+#!/bin/sh
+
+exit_code=10
+n=0
+
+pack="NONE"
+base_mm_input="NONE"
+new_mm_input="new.txt"
+build_comm="./build_pcm"
+mm_loc="NONE"
+modularize_comm="./run_modularize"
+
+while getopts p:b:c:i:m: flag
+do
+    case "${flag}" in
+        p) pack=${OPTARG};;
+        b) base_mm_input=${OPTARG};;
+        c) build_comm=${OPTARG};;
+        i) new_mm_input=${OPTARG};;
+        m) mm_loc=${OPTARG};;
+    esac
+done
+
+if [ $pack == "NONE" ]
+then
+   echo "Need a package (-p)"
+   echo "-b <base_mm_list>"
+   echo "-c <command to build mm>"
+   echo "-i <potential list to add to mm>"
+   echo "-m <module map location>"
+   exit 1
+fi
+
+rm -f working.txt
+touch working.txt
+if [ $base_mm_input != "NONE" ]
+then
+   cp $base_mm_input working.txt
+fi
+
+if [ $mm_loc == "NONE" ]
+then
+   nmm=`find *gcc* -name ${pack}.modulemap | wc -l`
+   if [ $nmm -ne 1 ]
+   then
+      echo "cant figure out the modulemap for ${pack}. Please help - consider -m <module_map location>"
+      exit 1
+   fi
+
+   mm_loc=`find *gcc* -name ${pack}.modulemap`
+   echo $mm_loc
+fi
+
+echo "using $mm_loc as module map location"
+touch $mm_loc
+
+strings=`cat $new_mm_input`
+
+#for group in 15 5 1;
+for group in 5 3 1;
+do
+new_strings=""
+hpp=""
+
+i=0
+for hpps in $strings
+do
+  #skip stuff there already
+  wc=`grep "^${hpps}" working.txt | wc -l`
+  if [ $wc -ne "0" ]
+  then
+     echo "skipping $hpps"
+     continue
+  fi
+
+  i=$[i+1]
+  hpp="${hpp} ${hpps}"
+  if (( $i == $group )) ;
+  then
+    cp working.txt working_old.txt
+    echo $hpp | tr ' ' '\n'  >> working.txt
+#    echo " " >> CMSDIST/pcm_util.spec
+    $modularize_comm -module-map-path=tmp.out working.txt
+    cp $mm_loc working_mm.txt
+    cp tmp.out $mm_loc 
+    $build_comm -m $pack -l $mm_loc
+    exit_code=$?
+    if [ "$exit_code" -ne 0 ]
+    then
+       cp working_old.txt working.txt
+       cp working_mm.txt $mm_loc
+       echo "INFO Skipping $hpp"
+       new_strings="$new_strings $hpp"
+    else
+       echo "INFO Adding $hpp"
+    fi
+    i=0
+    hpp=""
+  fi
+done
+
+
+#  break
+strings=$new_strings
+done
+
+
+echo $exit_code

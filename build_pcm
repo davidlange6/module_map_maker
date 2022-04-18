@@ -1,0 +1,96 @@
+#!/bin/sh
+
+flags=""
+mod="NONE"
+pack="NONE"
+mm_loc="NONE"
+
+while getopts m:p:l: flag
+do
+    case "${flag}" in
+        m) mod=${OPTARG};;
+        p) pack=${OPTARG};;
+        l) mm_loc=${OPTARG};;
+    esac
+done
+
+if [ $pack == "NONE" ]
+then
+   pack=$mod
+fi
+
+if [ $mod == "NONE" ]
+then
+   echo "Need a module to build -m"
+   exit 1
+fi
+
+n=`ls | grep gcc | wc -l`
+if [ $n -ne "1" ]
+then
+   echo "Cant figure out arch. Help"
+   exit 1
+fi
+arch=`ls | grep gcc`
+
+if [ $mm_loc == "NONE" ]
+then
+  n=`find ${arch} -name init.sh | grep /${pack}/ | wc -l`
+  if [ $n -ne "1" ]
+     then
+     echo "Cant figure out ${pack} version. help..."
+     exit 1
+  fi
+  init_file=`find ${arch} -name init.sh | grep /${pack}/`
+  init_dir=`dirname ${init_file}`
+  pack_dir=`dirname ${init_dir}`
+
+  n_mm=`find $pack_dir -name \*.modulemap | wc -l`
+  if [ $n_mm -ne "1" ]
+  then
+     echo "can not find module map. Help"
+     exit 1
+  fi
+  mm_loc=`find $pack_dir -name \*.modulemap`
+  exit
+fi
+
+mm_dir=`dirname ${mm_loc}`
+echo $mm_loc
+echo $mm_dir
+
+#echo $arch
+
+for package in $pack "root";
+do
+#  echo $package
+  n=`find ${arch} -name init.sh | grep /${package}/ | wc -l`
+  if [ $n -ne "1" ]
+     then
+     echo "Cant figure out ${package} version. help..."
+     exit 1
+  fi
+  source `find ${arch} -name init.sh | grep /${package}/` 
+done
+
+rm -f dummy_dict.cc                                                                                                                                                               rm -f libDummy.so
+touch empty.h
+echo "module Dummy{}" > dummy.modulemap
+echo "rootcling dummy_dict.cc -v2 $flags -moduleMapFile=${mm_loc} -s ./libDummy.so -moduleMapFile=dummy.modulemap -cxxmodule -m ${mod} -mByproduct ${mod}  -I${mm_dir} empty.h" 
+rootcling dummy_dict.cc -v2 $flags -moduleMapFile=${mm_loc} -s ./libDummy.so -moduleMapFile=dummy.modulemap -cxxmodule -m ${mod} -mByproduct ${mod}  -I${mm_dir} empty.h 
+#> /dev/null 2>&1
+
+ec=$?
+
+if [ $ec -eq "0" ]
+then
+  echo "All good"
+  ls -l ${mod}.pcm
+  rm ${mod}.pcm Dummy.pcm empty.h dummy.modulemap dummy_dict.cc
+else
+  echo "Failed"
+  rm dummy.pcm empty.h dummy.modulemap dummy_dict.cc
+fi
+
+exit $ec
+
