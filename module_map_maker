@@ -9,8 +9,10 @@ new_mm_input="new.txt"
 build_comm="./build_pcm"
 mm_loc="NONE"
 modularize_comm="./run_modularize"
+module="NONE"
+top_dir="NONE"
 
-while getopts p:b:c:i:m: flag
+while getopts p:b:c:i:m:n:t: flag
 do
     case "${flag}" in
         p) pack=${OPTARG};;
@@ -18,6 +20,8 @@ do
         c) build_comm=${OPTARG};;
         i) new_mm_input=${OPTARG};;
         m) mm_loc=${OPTARG};;
+        n) module=${OPTARG};;
+        t) top_dir=${OPTARG};;
     esac
 done
 
@@ -29,6 +33,11 @@ then
    echo "-i <potential list to add to mm>"
    echo "-m <module map location>"
    exit 1
+fi
+
+if [ $module == "NONE" ]
+then
+   module=$pack
 fi
 
 rm -f working.txt
@@ -80,10 +89,15 @@ do
     cp working.txt working_old.txt
     echo $hpp | tr ' ' '\n'  >> working.txt
 #    echo " " >> CMSDIST/pcm_util.spec
-    $modularize_comm -module-map-path=tmp.out working.txt
+    if [ $top_dir == "NONE" ]
+    then
+       $modularize_comm -module-map-path=tmp.out working.txt
+    else
+       $modularize_comm -module-map-path=tmp.out -root-module=${top_dir} working.txt
+    fi
     cp $mm_loc working_mm.txt
     cp tmp.out $mm_loc 
-    $build_comm -m $pack -l $mm_loc
+    $build_comm -m $module -l $mm_loc -p $pack
     exit_code=$?
     if [ "$exit_code" -ne 0 ]
     then
